@@ -1,0 +1,37 @@
+build/
+node-*/
+node-testbench/logs/
+code.tar.gz
+.log
+*.log
+logs.tar.gz
+ljudge-pipeline
+code/ModelSliceReader/test
+data/model_2023*
+code/demo_alimama_serach_service/demo_alimama_search_service
+testbench/alimama.grpc.pb.cc
+testbench/alimama.grpc.pb.h
+testbench/alimama.grpc.pb.o
+testbench/alimama.pb.cc
+testbench/alimama.pb.h
+testbench/alimama.pb.o
+testbench/*.o
+testbench/testbench
+testbench/export_to_hdfs
+testbench/gen_data
+<<<<<<< HEAD
+testbench/testbenchResult.json
+=======
+backup/*.tar.gz
+backup/*.json
+testbench/testbenchResult.json
+dockerfile/ModelSliceReader/libmodel_slice_reader.so
+dockerfile/hadoop-3.2.1.tar.gz
+.gitignore
+dockerfile/hadoop-3.2.1.tar.gz.asc
+code/demo_model_slice_reader/demo_model_slice_reader
+1.tar.gz
+dockerfile/1.sh
+2
+.gitignore
+>>>>>>> refs/remotes/origin/master
