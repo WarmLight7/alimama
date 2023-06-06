@@ -24,6 +24,8 @@ git fetch origin
 git branch -d master
 git checkout master
 git merge origin/main
+
+git remote add master origin
 git push origin master
 
 
