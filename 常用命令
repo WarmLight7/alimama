@@ -1,0 +1,16 @@
+#!/bin/bash
+
+docker start node-1
+
+
+docker exec -it node-1 bash
+
+cd demo_grpc_helloworld/ && make && ./greeter_server
+
+etcdctl del --prefix ""
+
+etcdctl get --prefix /
+
+git add code/demo_grpc_helloworld/greeter_server.cc
+git commit -u "提交c测试"
+git push
