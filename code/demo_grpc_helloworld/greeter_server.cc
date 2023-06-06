@@ -559,7 +559,6 @@ void RunServer(etcd::Client& myetcd) {
 
 
 
-
 int main(int argc, char** argv) {
     // etcd连接
     etcd::Client myetcd("http://etcd:2379");
