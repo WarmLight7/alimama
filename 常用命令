@@ -17,10 +17,13 @@ git fetch origin
 git checkout main
 git merge origin/master
 git push origin main
+git push origin --delete master
+
 
 
 ## 本地编写master版本提交
 git fetch origin
+git branch
 git branch -d master
 git checkout master
 git merge origin/main
