@@ -368,6 +368,7 @@ private:
     std::string sliceReaderKeyList[sliceReaderNumber];
     std::string hdfsUrl = "hdfs://namenode:9000";
     std::string path = "/";
+    // std::string path = "/backup/";
     ModelPathFinder modelPathFinder;
 public:
     GreeterServiceImpl(etcd::Client& etcdClient) : myetcd(etcdClient) {
@@ -378,21 +379,7 @@ public:
         modelPathFinder = ModelPathFinder(hdfsUrl, path);
     }
 
-    // 多线程HDFS读
-    void ReadFromHDFSThread(std::string modelPath, std::string slicePath, std::string localSlicePath)
-    {
-        modelPathFinder.moveToDisk(modelPath, slicePath, localSlicePath);
-        writeData(myetcd, slicePath, localIPPort);
-        ReadFromDisk(localSlicePath);
-    }
-
-    // 多线程磁盘读
-    void ReadFromDiskThread(std::string localSlicePath)
-    {
-        ReadFromDisk(localSlicePath);
-    }
-
-    void ReadFromDisk(std::string& localSlicePath){
+    void ReadFromDisk(const helloworld::SliceRequest& req, std::string localSlicePath, char* data_buffer){
         std::cout << "即将从本机磁盘读取..."<< std::endl;
         int sliceCount = -1;
         for (int valuableSliceCount = 0; valuableSliceCount < sliceReaderNumber; valuableSliceCount++){
@@ -414,14 +401,15 @@ public:
         sliceReaderList[sliceCount].Load(localSlicePath);
         sliceReaderKeyList[sliceCount]=localSlicePath;
         writeData(myetcd, localSlicePath, localIPPort+"_"+std::to_string(sliceCount));
-        // std::cout << "从当前节点读取数据:"<< sliceCount <<std::endl;
-        // sliceReaderList[sliceCount].Read(req.data_start(),req.data_len(), data_buffer);
+        std::cout << "从当前节点读取数据:"<< sliceCount <<std::endl;
+        sliceReaderList[sliceCount].Read(req.data_start(),req.data_len(), data_buffer);
     }
 
     Status Get(ServerContext* context, const Request* request,
                Response* response) override {
         
         // 1.获取模型版本信息
+        std::cout << "运行get函数成功："<< std::endl;
         response->set_status(0);
         
         std::string modelPath = modelPathFinder.FindModelPath();
@@ -447,54 +435,7 @@ public:
         // 2.加载本机需要的切片到内存（多线程）
         
         // 切片分组
-        std::unordered_set<int> slicePartitionSet;
-        for(auto &req : request->slice_request()){
-            slicePartitionSet.insert(req.slice_partition());
-        }
-        // 多线程在这里开始工作
-        // 2.1 检查需要本机加载的分组
-        for(auto& slicePartition : slicePartitionSet){
-            
-            std::string slicePath = modelPathFinder.FindSlicePath(modelPath, slicePartition);
-            std::string localSlicePath = "/work"+slicePath;
-            std::string diskCache = readData(myetcd, slicePath);
-            std::string memoryCache = readData(myetcd, localSlicePath);
 
-            // 2.1.1 首先区分磁盘缓存是否为空
-            if(diskCache == ""){
-                std::cout << "没有磁盘缓存该切片，即将从hadoop读取..."<< std::endl;
-
-                std::thread modelPathFinderThread(&GreeterServiceImpl::ReadFromHDFSThread, this, modelPath, slicePath, localSlicePath ); // 创建线程，并绑定到类的成员函数，并传递参数
-                modelPathFinderThread.detach(); // 分离线程，使其成为一个独立的后台线程
-
-                std::thread readFromDiskThread(&GreeterServiceImpl::ReadFromDiskThread, this, localSlicePath); // 创建线程，并绑定到类的成员函数，并传递参数
-                readFromDiskThread.detach(); // 分离线程，使其成为一个独立的后台线程
-            }
-
-            // 2.1.2 其次区分磁盘缓存是否为本机
-            else if(diskCache == localIPPort && memoryCache == "")
-            {
-                std::cout << "本机内存没有该切片，即将从本机磁盘读取..."<< std::endl;
-                std::thread readFromDiskThread(&GreeterServiceImpl::ReadFromDiskThread, this, localSlicePath); // 创建线程，并绑定到类的成员函数，并传递参数
-                readFromDiskThread.detach(); // 分离线程，使其成为一个独立的后台线程
-            }
-            else if(diskCache == localIPPort && memoryCache != "") // 这种情况表示已经在内存了
-            {
-                std::cout << "数据已位于本机内存..."<< std::endl;
-            }
-            else if(diskCache != localIPPort) // 版本回滚
-            {
-                std::cout << "从"<< diskCache <<"读取（先让目标主机把数据加载到内存）..."<< std::endl;
-                auto req = sliceRequestList[slicePartition][0];
-                GreeterClient greeter(grpc::CreateChannel(diskCache, grpc::InsecureChannelCredentials()));
-                // data_buffer = const_cast<char*>(greeter.Get(req.slice_partition(),req.data_start(),req.data_len()).c_str());
-                greeter.Get(req.slice_partition(),req.data_start(),req.data_len()).c_str();
-            }
-            else
-            {
-                std::cout << "出错，未考虑到相关情况，检查代码！"<< std::endl;
-            }
-        }
 
         for(auto &req : request->slice_request()){
             std::string slicePath = modelPathFinder.FindSlicePath(modelPath, req.slice_partition());
@@ -502,12 +443,7 @@ public:
             std::string diskCache = readData(myetcd, slicePath);
             std::string memoryCache = readData(myetcd, localSlicePath);
             char data_buffer[req.data_len()];
-            while(memoryCache == "")
-            {
-                std::cout << "多线程正在读取，请稍后..."<< std::endl;
-                memoryCache = readData(myetcd, localSlicePath);
-            }
-            if(memoryCache != localIPPort+"_"+std::to_string(req.slice_partition())){
+            if(diskCache != "" && diskCache != localIPPort){
                 std::cout << "从"<< diskCache <<"读取..."<< std::endl;
                 GreeterClient greeter(grpc::CreateChannel(
                     diskCache, grpc::InsecureChannelCredentials()));
@@ -515,12 +451,21 @@ public:
                 std::string get_buffer = greeter.Get(req.slice_partition(),req.data_start(),req.data_len()).c_str();
                 strcpy(data_buffer, get_buffer.c_str());
             }
-            else{
+            else if(diskCache == localIPPort && memoryCache!=""){
                 std::cout << "即将从本机内存直接加载..."<< std::endl;
-                int sliceCount = std::stoi(modelPathFinder.splitLastString(memoryCache, '_'));
+                int  sliceCount = std::stoi(modelPathFinder.splitLastString(memoryCache, '_'));
                 std::cout << "sliceReader节点:"<< sliceCount << std::endl;
                 sliceReaderList[sliceCount].Read(req.data_start(),req.data_len(), data_buffer);
                     //etcd标记该切片
+            }
+            else if(diskCache == localIPPort){
+                ReadFromDisk(req, localSlicePath, data_buffer);
+            }
+            else{
+                std::cout << "没有主机缓存该切片，即将从hadoop读取..."<< std::endl;
+                modelPathFinder.moveToDisk(modelPath, slicePath, localSlicePath);
+                writeData(myetcd, slicePath, localIPPort);
+                ReadFromDisk(req, localSlicePath, data_buffer);
             }
             response->add_slice_data(data_buffer);
             std::cout << "切片添加成功！" << std::endl;
@@ -537,9 +482,9 @@ public:
 void RunServer(etcd::Client& myetcd) {
 
     std::string server_address("0.0.0.0:50051");
-
+    
     GreeterServiceImpl service(myetcd);
-    regist(myetcd);
+    
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     ServerBuilder builder;
@@ -547,11 +492,13 @@ void RunServer(etcd::Client& myetcd) {
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     // Register "service" as the instance through which we'll communicate with
     // clients. In this case it corresponds to an *synchronous* service.
+    regist(myetcd);
     builder.RegisterService(&service);
+    
     // Finally assemble the server.
     std::unique_ptr<Server> server(builder.BuildAndStart());
     std::cout << "Server listening on " << server_address << std::endl;
-
+    
     // Wait for the server to shutdown. Note that some other thread must be
     // responsible for shutting down the server for this call to ever return.
     server->Wait();
