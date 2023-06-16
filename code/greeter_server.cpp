@@ -147,34 +147,34 @@ void GreeterServiceImpl::versionChange(std::string modelPath, bool moveFlag)
 
     if (test)
     {
-        writeData(myetcd, "/versionChange/node-" + std::string(std::getenv("NODE_ID")), modelPath);
+        myetcd.writeData("/versionChange/node-" + std::string(std::getenv("NODE_ID")), modelPath);
         std::string node1 = "", node3 = "";
         while (node1 != modelPath || node3 != modelPath)
         {
             if (node1 != modelPath)
-                node1 = readData(myetcd, "/versionChange/node-1");
+                node1 = myetcd.readData("/versionChange/node-1");
             if (node3 != modelPath)
-                node3 = readData(myetcd, "/versionChange/node-3");
+                node3 = myetcd.readData("/versionChange/node-3");
         }
     }
     else
     {
-        writeData(myetcd, "/versionChange/node-" + std::string(std::getenv("NODE_ID")), modelPath);
+        myetcd.writeData("/versionChange/node-" + std::string(std::getenv("NODE_ID")), modelPath);
         std::string node1 = "", node2 = "", node3 = "", node4 = "", node5 = "", node6 = "";
         while (node1 != modelPath || node2 != modelPath || node3 != modelPath || node4 != modelPath || node5 != modelPath || node6 != modelPath)
         {
             if (node1 != modelPath)
-                node1 = readData(myetcd, "/versionChange/node-1");
+                node1 = myetcd.readData("/versionChange/node-1");
             if (node2 != modelPath)
-                node2 = readData(myetcd, "/versionChange/node-2");
+                node2 = myetcd.readData("/versionChange/node-2");
             if (node3 != modelPath)
-                node3 = readData(myetcd, "/versionChange/node-3");
+                node3 = myetcd.readData("/versionChange/node-3");
             if (node4 != modelPath)
-                node4 = readData(myetcd, "/versionChange/node-4");
+                node4 = myetcd.readData("/versionChange/node-4");
             if (node5 != modelPath)
-                node5 = readData(myetcd, "/versionChange/node-5");
+                node5 = myetcd.readData("/versionChange/node-5");
             if (node6 != modelPath)
-                node6 = readData(myetcd, "/versionChange/node-6");
+                node6 = myetcd.readData("/versionChange/node-6");
             // std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
     }
